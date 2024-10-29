@@ -1,8 +1,12 @@
-### Mejoras utilizando el Patrón **Factory Method**
+### 1. **¿Cómo podemos manejar tipos de notificación adicionales sin modificar la clase `NotificationService`?**
 
-Para mejorar este código, podemos utilizar el **Factory Method** para delegar la creación de diferentes tipos de notificaciones, lo que hace que el código sea más extensible y flexible【17†source】【18†source】.
+Para abordar este problema, una buena opción es usar el **Patrón Factory Method** o incluso el **Patrón Abstract Factory** si anticipamos que los tipos de notificación pueden tener familias de objetos relacionados.
 
-#### Código Refactorizado: Implementación con Factory Method
+#### Implementación usando Factory Method
+
+En lugar de que `NotificationService` maneje la lógica de creación de cada tipo de notificación, podemos crear una interfaz de fábrica (`NotificationFactory`) que defina un método para crear notificaciones. Cada tipo de notificación tendrá su propia fábrica que implementará esta interfaz y devolverá la instancia correcta. Así, `NotificationService` solo interactúa con `NotificationFactory`, y la adición de nuevas notificaciones es cuestión de agregar nuevas fábricas.
+
+#### Código
 
 ```csharp
 using System;
@@ -32,49 +36,27 @@ namespace NotificationManager
         }
     }
 
-    public class PushNotification : Notification
-    {
-        public override void Send(string message)
-        {
-            Console.WriteLine("Enviando Notificación Push: " + message);
-        }
-    }
-
-    // Creador abstracto
+    // Creador abstracto de notificaciones
     public abstract class NotificationFactory
     {
         public abstract Notification CreateNotification();
     }
 
-    // Creadores concretos
+    // Fábricas concretas para cada tipo de notificación
     public class SMSNotificationFactory : NotificationFactory
     {
-        public override Notification CreateNotification()
-        {
-            return new SMSNotification();
-        }
+        public override Notification CreateNotification() => new SMSNotification();
     }
 
     public class EmailNotificationFactory : NotificationFactory
     {
-        public override Notification CreateNotification()
-        {
-            return new EmailNotification();
-        }
+        public override Notification CreateNotification() => new EmailNotification();
     }
 
-    public class PushNotificationFactory : NotificationFactory
-    {
-        public override Notification CreateNotification()
-        {
-            return new PushNotification();
-        }
-    }
-
-    // Clase cliente
+    // Servicio de notificaciones usando la fábrica
     public class NotificationService
     {
-        private NotificationFactory _factory;
+        private readonly NotificationFactory _factory;
 
         public NotificationService(NotificationFactory factory)
         {
@@ -88,6 +70,7 @@ namespace NotificationManager
         }
     }
 
+    // Ejemplo de uso
     class Program
     {
         static void Main(string[] args)
@@ -97,21 +80,12 @@ namespace NotificationManager
 
             NotificationService emailService = new NotificationService(new EmailNotificationFactory());
             emailService.SendNotification("Mensaje de prueba para Email");
-
-            NotificationService pushService = new NotificationService(new PushNotificationFactory());
-            pushService.SendNotification("Mensaje de prueba para Push");
         }
     }
 }
 ```
 
-### Mejoras Logradas
-
-1. **Extensibilidad**: Se pueden agregar nuevos tipos de notificaciones creando nuevas clases de productos y fábricas sin modificar `NotificationService`.
-2. **Cumplimiento del Principio OCP**: `NotificationService` está abierto para extensión y cerrado para modificación.
-3. **Claridad y Mantenibilidad**: Cada tipo de notificación tiene su propia clase, lo que hace que el código sea más fácil de mantener y leer【19†source】【22†source】.
-
-### Posibles Patrones Adicionales
-
-- **Patrón Singleton** para asegurar que solo exista una instancia de `NotificationService` cuando sea necesario, evitando múltiples instancias que puedan causar redundancia【16†source】【17†source】.
-- **Decorator**: Para agregar funcionalidades adicionales a las notificaciones, como agregar un log antes de enviar o registrar el mensaje en una base de datos【18†source】.
+#### Ventajas de este enfoque
+1. **Extensibilidad**: Añadir un nuevo tipo de notificación solo requiere crear una nueva fábrica y una nueva clase de notificación.
+2. **Abierto a extensiones y cerrado a modificaciones**: Evita modificar el código de `NotificationService` cuando se añaden nuevos tipos de notificación.
+3. **Flexibilidad**: El `NotificationService` es independiente de los tipos de notificación específicos, delegando la responsabilidad a las fábricas concretas.
