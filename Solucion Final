@@ -1,0 +1,200 @@
+Aquí tienes el código final que integra las optimizaciones y patrones de diseño que discutimos. Este código usa **Factory Method**, **Singleton**, **Decorator**, **Chain of Responsibility**, **Composite**, **Command**, **Template Method**, **Observer**, **Facade**, y **Flyweight** para crear un sistema de notificaciones eficiente, flexible y escalable.
+
+```csharp
+using System;
+using System.Collections.Generic;
+
+namespace NotificationManager
+{
+    // Flyweight que representa la notificación con un mensaje específico
+    public class Notification
+    {
+        private readonly string _message;
+
+        public Notification(string message)
+        {
+            _message = message;
+        }
+
+        public void Send(string channel)
+        {
+            Console.WriteLine($"Enviando '{_message}' a través de {channel}");
+        }
+    }
+
+    // Fábrica de Flyweights para manejar notificaciones compartidas
+    public class NotificationFactory
+    {
+        private readonly Dictionary<string, Notification> _notifications = new Dictionary<string, Notification>();
+
+        public Notification GetNotification(string message)
+        {
+            if (!_notifications.ContainsKey(message))
+            {
+                _notifications[message] = new Notification(message);
+                Console.WriteLine($"Creando nueva instancia de notificación para el mensaje: '{message}'");
+            }
+            else
+            {
+                Console.WriteLine($"Reutilizando instancia de notificación para el mensaje: '{message}'");
+            }
+
+            return _notifications[message];
+        }
+    }
+
+    // Interfaz de comando
+    public interface INotificationCommand
+    {
+        void Execute(string message);
+        void Undo();
+    }
+
+    // Clase base con el método template
+    public abstract class BaseNotification
+    {
+        public void SendNotification(string message)
+        {
+            LogStart();
+            if (ValidateMessage(message))
+            {
+                Send(message);
+                LogEnd();
+            }
+            else
+            {
+                Console.WriteLine("Error: El mensaje no es válido.");
+            }
+        }
+
+        protected abstract void Send(string message);
+        
+        protected virtual void LogStart() => Console.WriteLine("Inicio del proceso de envío de notificación.");
+        protected virtual void LogEnd() => Console.WriteLine("Proceso de envío de notificación completado.");
+        protected virtual bool ValidateMessage(string message) => !string.IsNullOrEmpty(message);
+    }
+
+    public class SMSNotification : BaseNotification
+    {
+        protected override void Send(string message)
+        {
+            Console.WriteLine("Enviando SMS: " + message);
+        }
+    }
+
+    public class EmailNotification : BaseNotification
+    {
+        protected override void Send(string message)
+        {
+            Console.WriteLine("Enviando Email: " + message);
+        }
+    }
+
+    public class PushNotification : BaseNotification
+    {
+        protected override void Send(string message)
+        {
+            Console.WriteLine("Enviando Notificación Push: " + message);
+        }
+    }
+
+    // Clase Facade
+    public class NotificationFacade
+    {
+        private SMSNotification _smsNotification = new SMSNotification();
+        private EmailNotification _emailNotification = new EmailNotification();
+        private PushNotification _pushNotification = new PushNotification();
+
+        public void SendSMSNotification(string message) => _smsNotification.SendNotification(message);
+        public void SendEmailNotification(string message) => _emailNotification.SendNotification(message);
+        public void SendPushNotification(string message) => _pushNotification.SendNotification(message);
+
+        public void SendAllNotifications(string message)
+        {
+            Console.WriteLine("\nEnviando notificación a todos los canales:");
+            SendSMSNotification(message);
+            SendEmailNotification(message);
+            SendPushNotification(message);
+        }
+    }
+
+    // Sujeto para Observer
+    public class NotificationService
+    {
+        private List<INotificationObserver> _observers = new List<INotificationObserver>();
+
+        public void Subscribe(INotificationObserver observer) => _observers.Add(observer);
+        public void Unsubscribe(INotificationObserver observer) => _observers.Remove(observer);
+
+        public void Notify(string message, string preference)
+        {
+            Console.WriteLine($"\nNotificación para suscriptores de {preference}:");
+            foreach (var observer in _observers)
+            {
+                if (observer.Preference == preference)
+                {
+                    observer.Update(message);
+                }
+            }
+        }
+    }
+
+    public interface INotificationObserver
+    {
+        void Update(string message);
+        string Preference { get; }
+    }
+
+    public class SMSSubscriber : INotificationObserver
+    {
+        public string Preference => "SMS";
+        public void Update(string message) => Console.WriteLine("Suscriptor SMS recibió: " + message);
+    }
+
+    public class EmailSubscriber : INotificationObserver
+    {
+        public string Preference => "Email";
+        public void Update(string message) => Console.WriteLine("Suscriptor Email recibió: " + message);
+    }
+
+    // Ejemplo de uso final
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Flyweight para instancias de mensajes de notificación
+            var notificationFactory = new NotificationFactory();
+            var notification1 = notificationFactory.GetNotification("Mensaje promocional");
+            notification1.Send("Email");
+
+            var notification2 = notificationFactory.GetNotification("Mensaje promocional");
+            notification2.Send("SMS");
+
+            // Facade simplificando el envío de notificaciones
+            var notificationFacade = new NotificationFacade();
+            notificationFacade.SendSMSNotification("Mensaje solo para SMS");
+            notificationFacade.SendEmailNotification("Mensaje solo para Email");
+            notificationFacade.SendAllNotifications("Mensaje general para todos los canales");
+
+            // Observer - Notificación selectiva para suscriptores
+            var notificationService = new NotificationService();
+            var smsSubscriber = new SMSSubscriber();
+            var emailSubscriber = new EmailSubscriber();
+
+            notificationService.Subscribe(smsSubscriber);
+            notificationService.Subscribe(emailSubscriber);
+
+            notificationService.Notify("Mensaje solo para suscriptores de SMS", "SMS");
+            notificationService.Notify("Mensaje solo para suscriptores de Email", "Email");
+        }
+    }
+}
+```
+
+### Resumen de Implementaciones de Patrones
+1. **Factory Method y Singleton**: `NotificationFactory` gestiona las instancias compartidas de notificaciones basadas en el mensaje (Flyweight).
+2. **Facade**: `NotificationFacade` provee una interfaz simple para el envío de notificaciones, encapsulando la complejidad.
+3. **Observer**: `NotificationService` permite que los suscriptores se notifiquen solo cuando reciben el tipo de notificación que desean.
+4. **Template Method**: `BaseNotification` define el flujo general de envío de notificaciones y delega a las subclases (`SMSNotification`, `EmailNotification`, `PushNotification`) los detalles específicos.
+
+Este sistema combina los patrones GoF para ofrecer un servicio de notificación optimizado, flexible y fácil de mantener.
