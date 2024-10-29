@@ -84,6 +84,3 @@ NotificationService --> NotificationFactory : usa
 
 @enduml
 ```
-
-### Conclusión
-Este ejemplo demuestra cómo utilizar el **Factory Method** para mejorar la flexibilidad y mantenibilidad del código. Existen otros patrones que también podrían integrarse, pero esto depende de los requisitos específicos y del contexto de uso del sistema.
