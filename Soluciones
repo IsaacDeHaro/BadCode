@@ -89,3 +89,954 @@ namespace NotificationManager
 1. **Extensibilidad**: Añadir un nuevo tipo de notificación solo requiere crear una nueva fábrica y una nueva clase de notificación.
 2. **Abierto a extensiones y cerrado a modificaciones**: Evita modificar el código de `NotificationService` cuando se añaden nuevos tipos de notificación.
 3. **Flexibilidad**: El `NotificationService` es independiente de los tipos de notificación específicos, delegando la responsabilidad a las fábricas concretas.
+
+### 2. **¿Es la creación de instancias de `NotificationService` eficiente o deberíamos implementar un patrón Singleton?**
+
+Implementar el patrón **Singleton** sería útil si queremos asegurarnos de que solo exista una única instancia de `NotificationService` en la aplicación. Esto puede ser particularmente eficiente si `NotificationService` maneja recursos que deben compartirse, como conexiones de red o autenticación con una API externa, evitando la sobrecarga de instanciar múltiples servicios.
+
+### Implementación del Patrón Singleton
+
+Para implementar Singleton en `NotificationService`, debemos asegurarnos de que:
+1. Exista solo una instancia de `NotificationService`.
+2. Esta instancia sea accesible globalmente en la aplicación.
+
+Aquí está la versión de `NotificationService` como Singleton:
+
+```csharp
+using System;
+
+namespace NotificationManager
+{
+    public class NotificationService
+    {
+        private static NotificationService _instance;
+        private static readonly object _lock = new object();
+
+        private NotificationService() { }
+
+        // Método para obtener la instancia única
+        public static NotificationService GetInstance()
+        {
+            lock (_lock)
+            {
+                if (_instance == null)
+                {
+                    _instance = new NotificationService();
+                }
+            }
+            return _instance;
+        }
+
+        public void SendNotification(Notification notification, string message)
+        {
+            notification.Send(message);
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var notificationService = NotificationService.GetInstance();
+            notificationService.SendNotification(new SMSNotification(), "Mensaje de prueba para SMS");
+
+            // Reutilización de la misma instancia
+            var sameNotificationService = NotificationService.GetInstance();
+            sameNotificationService.SendNotification(new EmailNotification(), "Mensaje de prueba para Email");
+
+            Console.WriteLine(ReferenceEquals(notificationService, sameNotificationService) ? "Usando la misma instancia de NotificationService" : "Instancias diferentes");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Optimización de Recursos**: Con el patrón Singleton, solo se crea una instancia de `NotificationService`, evitando instancias redundantes y conservando recursos del sistema.
+2. **Control Centralizado**: Si `NotificationService` maneja un recurso compartido o realiza tareas específicas, centralizarlas en una sola instancia reduce el riesgo de inconsistencias.
+3. **Escalabilidad**: En aplicaciones más complejas, el uso de Singleton en servicios compartidos puede simplificar la gestión de recursos.
+
+### 3. **¿Qué patrón podemos usar para agregar características adicionales a las notificaciones, como logueo o almacenamiento en base de datos, sin modificar las clases existentes?**
+
+Para agregar funcionalidad adicional de forma flexible sin modificar las clases de notificación, podemos utilizar el **Patrón Decorator**. Este patrón nos permite envolver un objeto en otros objetos decoradores que pueden añadir funcionalidad adicional. En este caso, podríamos añadir decoradores para loguear, almacenar en base de datos, o cualquier otra característica sin tocar la implementación base de cada tipo de notificación.
+
+### Implementación del Patrón Decorator
+
+Aquí agregamos decoradores para loguear la notificación y guardarla en una base de datos (simulado con un mensaje en la consola). Cada decorador envuelve a un objeto `Notification` y agrega funcionalidad adicional antes o después de enviar la notificación.
+
+#### Código Ejemplo
+
+```csharp
+using System;
+
+namespace NotificationManager
+{
+    // Componente base
+    public abstract class Notification
+    {
+        public abstract void Send(string message);
+    }
+
+    // Productos concretos
+    public class SMSNotification : Notification
+    {
+        public override void Send(string message)
+        {
+            Console.WriteLine("Enviando SMS: " + message);
+        }
+    }
+
+    public class EmailNotification : Notification
+    {
+        public override void Send(string message)
+        {
+            Console.WriteLine("Enviando Email: " + message);
+        }
+    }
+
+    // Decorador base
+    public abstract class NotificationDecorator : Notification
+    {
+        protected Notification _notification;
+
+        public NotificationDecorator(Notification notification)
+        {
+            _notification = notification;
+        }
+
+        public override void Send(string message)
+        {
+            _notification.Send(message);
+        }
+    }
+
+    // Decorador para loguear la notificación
+    public class LogNotificationDecorator : NotificationDecorator
+    {
+        public LogNotificationDecorator(Notification notification) : base(notification) { }
+
+        public override void Send(string message)
+        {
+            Console.WriteLine("Log: Preparando para enviar notificación.");
+            base.Send(message);
+            Console.WriteLine("Log: Notificación enviada.");
+        }
+    }
+
+    // Decorador para almacenar en base de datos
+    public class DatabaseNotificationDecorator : NotificationDecorator
+    {
+        public DatabaseNotificationDecorator(Notification notification) : base(notification) { }
+
+        public override void Send(string message)
+        {
+            Console.WriteLine("Guardando en base de datos: " + message);
+            base.Send(message);
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Crear una notificación de SMS y decorarla con log y almacenamiento en base de datos
+            Notification smsNotification = new SMSNotification();
+            Notification loggedSMS = new LogNotificationDecorator(smsNotification);
+            Notification loggedAndStoredSMS = new DatabaseNotificationDecorator(loggedSMS);
+
+            // Enviar notificación con decoradores
+            loggedAndStoredSMS.Send("Mensaje de prueba para SMS");
+            
+            Console.WriteLine();
+
+            // Crear una notificación de Email solo con el decorador de log
+            Notification emailNotification = new EmailNotification();
+            Notification loggedEmail = new LogNotificationDecorator(emailNotification);
+
+            loggedEmail.Send("Mensaje de prueba para Email");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Modularidad**: Se puede agregar o quitar funcionalidad adicional de forma dinámica sin modificar la clase `Notification`.
+2. **Reutilización**: Cada decorador es una clase independiente, lo que permite reutilizar funcionalidad de logging o almacenamiento en cualquier tipo de notificación.
+3. **Flexibilidad**: Puedes combinar varios decoradores en cualquier orden para obtener comportamientos personalizados en tiempo de ejecución.
+
+### 4. **¿Cómo podemos asegurar que las notificaciones se envíen en un orden específico o bajo ciertas condiciones?**
+
+Para manejar el envío de notificaciones en un orden específico o basado en condiciones, podemos utilizar el **Patrón Chain of Responsibility**. Este patrón permite construir una cadena de manejadores (handlers) donde cada uno decide si procesa la solicitud o la pasa al siguiente en la cadena.
+
+### Implementación del Patrón Chain of Responsibility
+
+Crearemos una cadena de responsabilidad en la que cada notificación decide si debe ser enviada en función de una condición específica. Si no cumple con su condición, pasa la solicitud al siguiente manejador en la cadena.
+
+#### Código Ejemplo
+
+Aquí simularemos condiciones simples para cada tipo de notificación y luego estableceremos una cadena de notificaciones. Si el primer tipo de notificación no cumple la condición, el siguiente en la cadena intentará procesarla.
+
+```csharp
+using System;
+
+namespace NotificationManager
+{
+    // Clase abstracta que representa un manejador en la cadena
+    public abstract class NotificationHandler
+    {
+        protected NotificationHandler NextHandler;
+
+        public void SetNext(NotificationHandler nextHandler)
+        {
+            NextHandler = nextHandler;
+        }
+
+        public abstract void Handle(string message);
+    }
+
+    // Manejador para notificaciones SMS
+    public class SMSNotificationHandler : NotificationHandler
+    {
+        public override void Handle(string message)
+        {
+            if (ShouldSendSMS())
+            {
+                Console.WriteLine("Enviando SMS: " + message);
+            }
+            else if (NextHandler != null)
+            {
+                NextHandler.Handle(message);
+            }
+        }
+
+        private bool ShouldSendSMS()
+        {
+            // Condición simulada, puede ser cualquier lógica (por ejemplo, horario de envío)
+            return DateTime.Now.Hour < 12;
+        }
+    }
+
+    // Manejador para notificaciones por Email
+    public class EmailNotificationHandler : NotificationHandler
+    {
+        public override void Handle(string message)
+        {
+            if (ShouldSendEmail())
+            {
+                Console.WriteLine("Enviando Email: " + message);
+            }
+            else if (NextHandler != null)
+            {
+                NextHandler.Handle(message);
+            }
+        }
+
+        private bool ShouldSendEmail()
+        {
+            // Condición simulada
+            return DateTime.Now.Hour >= 12 && DateTime.Now.Hour < 18;
+        }
+    }
+
+    // Manejador para notificaciones Push
+    public class PushNotificationHandler : NotificationHandler
+    {
+        public override void Handle(string message)
+        {
+            if (ShouldSendPush())
+            {
+                Console.WriteLine("Enviando Notificación Push: " + message);
+            }
+            else if (NextHandler != null)
+            {
+                NextHandler.Handle(message);
+            }
+        }
+
+        private bool ShouldSendPush()
+        {
+            // Condición simulada
+            return DateTime.Now.Hour >= 18;
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Crear la cadena de manejadores
+            var smsHandler = new SMSNotificationHandler();
+            var emailHandler = new EmailNotificationHandler();
+            var pushHandler = new PushNotificationHandler();
+
+            smsHandler.SetNext(emailHandler);
+            emailHandler.SetNext(pushHandler);
+
+            // Enviar notificación
+            smsHandler.Handle("Mensaje importante para la cadena de notificaciones.");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Flexibilidad en el manejo de condiciones**: Cada tipo de notificación tiene su propia lógica para decidir si se envía o se pasa al siguiente.
+2. **Extensibilidad**: Se pueden agregar nuevos tipos de notificación a la cadena sin cambiar la lógica de las notificaciones existentes.
+3. **Mantenibilidad**: La lógica de condiciones específicas para cada notificación está encapsulada en su propio manejador, lo que hace que el código sea más limpio y fácil de mantener.
+
+### 5. **¿Existen datos comunes que podrían encapsularse mejor usando un patrón de composición o agregación?**
+
+En este caso, podemos aplicar el **Patrón Composite** si queremos tratar un conjunto de notificaciones o grupos de notificaciones de manera uniforme. Esto es útil si deseamos enviar varias notificaciones al mismo tiempo o aplicar alguna acción en grupo, como cancelar o reenviar todas las notificaciones en la colección.
+
+### Implementación del Patrón Composite
+
+Podemos crear una clase `CompositeNotification` que actúe como una colección de notificaciones. Esta clase implementará la misma interfaz o clase base `Notification`, permitiendo que tanto `CompositeNotification` como las notificaciones individuales (`SMSNotification`, `EmailNotification`, etc.) se traten de la misma manera en `NotificationService`.
+
+#### Código Ejemplo
+
+`CompositeNotification` es un contenedor de otras notificaciones. Al enviar una notificación a través de `CompositeNotification`, todas las notificaciones que contiene se envían automáticamente.
+
+```csharp
+using System;
+using System.Collections.Generic;
+
+namespace NotificationManager
+{
+    // Componente base
+    public abstract class Notification
+    {
+        public abstract void Send(string message);
+    }
+
+    // Productos concretos
+    public class SMSNotification : Notification
+    {
+        public override void Send(string message)
+        {
+            Console.WriteLine("Enviando SMS: " + message);
+        }
+    }
+
+    public class EmailNotification : Notification
+    {
+        public override void Send(string message)
+        {
+            Console.WriteLine("Enviando Email: " + message);
+        }
+    }
+
+    public class PushNotification : Notification
+    {
+        public override void Send(string message)
+        {
+            Console.WriteLine("Enviando Notificación Push: " + message);
+        }
+    }
+
+    // Composite que permite agrupar notificaciones
+    public class CompositeNotification : Notification
+    {
+        private readonly List<Notification> _notifications = new List<Notification>();
+
+        public void Add(Notification notification)
+        {
+            _notifications.Add(notification);
+        }
+
+        public void Remove(Notification notification)
+        {
+            _notifications.Remove(notification);
+        }
+
+        public override void Send(string message)
+        {
+            foreach (var notification in _notifications)
+            {
+                notification.Send(message);
+            }
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Crear notificaciones individuales
+            var smsNotification = new SMSNotification();
+            var emailNotification = new EmailNotification();
+            var pushNotification = new PushNotification();
+
+            // Crear un composite de notificaciones
+            var allNotifications = new CompositeNotification();
+            allNotifications.Add(smsNotification);
+            allNotifications.Add(emailNotification);
+            allNotifications.Add(pushNotification);
+
+            // Enviar mensaje a todas las notificaciones en el composite
+            allNotifications.Send("Mensaje de prueba para todas las notificaciones.");
+
+            Console.WriteLine();
+
+            // También puedes enviar notificaciones individuales
+            emailNotification.Send("Mensaje individual para Email.");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Tratamiento Uniforme**: Permite tratar una colección de notificaciones como si fuera una sola notificación.
+2. **Escalabilidad**: Se pueden agregar o quitar notificaciones del `CompositeNotification` en tiempo de ejecución, proporcionando flexibilidad en la gestión de notificaciones en grupo.
+3. **Extensibilidad**: Puedes añadir otros tipos de notificaciones al composite sin modificar su implementación.
+
+### 6. **¿Podemos implementar una forma de deshacer el envío de una notificación?**
+
+Para agregar la capacidad de deshacer el envío de una notificación, podemos aplicar el **Patrón Command**. Este patrón encapsula solicitudes como objetos, permitiendo ejecutar o deshacer operaciones. En este caso, encapsularemos el envío de una notificación en un comando, y así podremos implementar la operación de "deshacer".
+
+### Implementación del Patrón Command
+
+La idea es tener un comando para cada tipo de notificación (enviar, cancelar o deshacer). Cada comando debe implementar una interfaz `INotificationCommand` con métodos `Execute` (para enviar) y `Undo` (para deshacer).
+
+#### Código Ejemplo
+
+Aquí crearemos comandos para enviar y deshacer el envío de notificaciones. Esto será una simulación, ya que realmente deshacer el envío de una notificación dependerá del soporte de deshacer de cada canal de comunicación (por ejemplo, eliminar un mensaje enviado en una aplicación de mensajería).
+
+```csharp
+using System;
+
+namespace NotificationManager
+{
+    // Interfaz de comando
+    public interface INotificationCommand
+    {
+        void Execute(string message);
+        void Undo();
+    }
+
+    // Comando para enviar SMS
+    public class SMSNotificationCommand : INotificationCommand
+    {
+        private string _lastMessage;
+
+        public void Execute(string message)
+        {
+            _lastMessage = message;
+            Console.WriteLine("Enviando SMS: " + message);
+        }
+
+        public void Undo()
+        {
+            Console.WriteLine("Deshaciendo envío de SMS: " + _lastMessage);
+            _lastMessage = null;
+        }
+    }
+
+    // Comando para enviar Email
+    public class EmailNotificationCommand : INotificationCommand
+    {
+        private string _lastMessage;
+
+        public void Execute(string message)
+        {
+            _lastMessage = message;
+            Console.WriteLine("Enviando Email: " + message);
+        }
+
+        public void Undo()
+        {
+            Console.WriteLine("Deshaciendo envío de Email: " + _lastMessage);
+            _lastMessage = null;
+        }
+    }
+
+    // Comando para enviar Push
+    public class PushNotificationCommand : INotificationCommand
+    {
+        private string _lastMessage;
+
+        public void Execute(string message)
+        {
+            _lastMessage = message;
+            Console.WriteLine("Enviando Notificación Push: " + message);
+        }
+
+        public void Undo()
+        {
+            Console.WriteLine("Deshaciendo envío de Notificación Push: " + _lastMessage);
+            _lastMessage = null;
+        }
+    }
+
+    // Clase cliente que maneja los comandos
+    public class NotificationService
+    {
+        private INotificationCommand _command;
+
+        public void SetCommand(INotificationCommand command)
+        {
+            _command = command;
+        }
+
+        public void SendNotification(string message)
+        {
+            _command.Execute(message);
+        }
+
+        public void UndoLastNotification()
+        {
+            _command.Undo();
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var notificationService = new NotificationService();
+
+            // Enviar y deshacer un SMS
+            var smsCommand = new SMSNotificationCommand();
+            notificationService.SetCommand(smsCommand);
+            notificationService.SendNotification("Mensaje de prueba para SMS");
+            notificationService.UndoLastNotification();
+
+            Console.WriteLine();
+
+            // Enviar y deshacer un Email
+            var emailCommand = new EmailNotificationCommand();
+            notificationService.SetCommand(emailCommand);
+            notificationService.SendNotification("Mensaje de prueba para Email");
+            notificationService.UndoLastNotification();
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Flexibilidad para deshacer acciones**: La implementación permite deshacer el último comando ejecutado.
+2. **Extensibilidad**: Se pueden añadir nuevos tipos de notificaciones y comandos (por ejemplo, un comando de deshacer para `PushNotification`) sin modificar el código base.
+3. **Control centralizado de acciones**: Todas las operaciones se manejan a través del `NotificationService`, lo que hace que el flujo de trabajo sea claro y fácil de mantener.
+
+### 7. **¿Es posible generalizar los métodos de envío para reducir duplicación de código entre tipos de notificación?**
+
+Para reducir la duplicación de código en el proceso de envío, podemos aplicar el **Patrón Template Method**. Este patrón define una estructura general para un proceso, permitiendo a las subclases implementar partes específicas del proceso sin cambiar la estructura global. 
+
+### Implementación del Patrón Template Method
+
+Con el patrón Template Method, podemos definir en una clase base (`Notification`) un método `SendNotification()` que maneje los pasos comunes del envío de una notificación. Cada tipo de notificación (SMS, Email, Push) puede entonces sobrescribir solo los pasos específicos, sin duplicar el proceso completo.
+
+#### Código
+
+```csharp
+using System;
+
+namespace NotificationManager
+{
+    // Clase base con el método template
+    public abstract class Notification
+    {
+        // Método template que define el flujo general
+        public void SendNotification(string message)
+        {
+            LogStart();                 // Paso 1: loguear el inicio del envío
+            if (ValidateMessage(message)) // Paso 2: validar el mensaje
+            {
+                Send(message);           // Paso 3: envío específico de la subclase
+                LogEnd();                // Paso 4: loguear fin del envío
+            }
+            else
+            {
+                Console.WriteLine("Error: El mensaje no es válido.");
+            }
+        }
+
+        // Método específico que cada subclase implementa
+        protected abstract void Send(string message);
+
+        // Métodos comunes, reutilizables en todas las notificaciones
+        protected virtual void LogStart()
+        {
+            Console.WriteLine("Inicio del proceso de envío de notificación.");
+        }
+
+        protected virtual void LogEnd()
+        {
+            Console.WriteLine("Proceso de envío de notificación completado.");
+        }
+
+        protected virtual bool ValidateMessage(string message)
+        {
+            return !string.IsNullOrEmpty(message); // Validación genérica del mensaje
+        }
+    }
+
+    // Notificación SMS que implementa el paso específico de envío
+    public class SMSNotification : Notification
+    {
+        protected override void Send(string message)
+        {
+            Console.WriteLine("Enviando SMS: " + message);
+        }
+    }
+
+    // Notificación Email que implementa el paso específico de envío
+    public class EmailNotification : Notification
+    {
+        protected override void Send(string message)
+        {
+            Console.WriteLine("Enviando Email: " + message);
+        }
+    }
+
+    // Notificación Push que implementa el paso específico de envío
+    public class PushNotification : Notification
+    {
+        protected override void Send(string message)
+        {
+            Console.WriteLine("Enviando Notificación Push: " + message);
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Notification smsNotification = new SMSNotification();
+            smsNotification.SendNotification("Mensaje de prueba para SMS");
+
+            Console.WriteLine();
+
+            Notification emailNotification = new EmailNotification();
+            emailNotification.SendNotification("Mensaje de prueba para Email");
+
+            Console.WriteLine();
+
+            Notification pushNotification = new PushNotification();
+            pushNotification.SendNotification("Mensaje de prueba para Push");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Reducción de duplicación de código**: Los pasos comunes, como el inicio, la validación, y el fin del envío, están centralizados en la clase base `Notification`.
+2. **Extensibilidad**: Si se necesitan nuevos pasos o modificaciones en el flujo, se pueden realizar en la clase base sin modificar cada subclase.
+3. **Separación de responsabilidades**: Cada subclase solo se enfoca en el paso específico de envío, manteniendo el código limpio y enfocado.
+
+### 8. **¿Cómo se podría implementar un sistema de notificación más eficiente, en el que solo algunos usuarios reciban ciertas notificaciones?**
+
+Para implementar un sistema de notificación que solo envíe mensajes a ciertos usuarios según sus intereses o preferencias, el **Patrón Observer** es ideal. Este patrón permite que los objetos (observadores) se suscriban y reciban notificaciones solo cuando hay cambios o eventos específicos.
+
+### Implementación del Patrón Observer
+
+El patrón Observer se compone de dos roles principales:
+1. **Sujeto (Subject)**: Gestiona la lista de suscriptores y notifica a cada uno cuando hay un evento (en este caso, una nueva notificación).
+2. **Observadores (Observers)**: Los suscriptores que reciben notificaciones cuando están suscritos al sujeto y se cumple una condición específica.
+
+#### Código Ejemplo
+
+Se crea una clase `NotificationService` que actúa como el sujeto, mientras que cada tipo de usuario (por ejemplo, `EmailSubscriber`, `SMSSubscriber`) implementa la interfaz `INotificationObserver` para recibir notificaciones según su tipo de preferencia.
+
+```csharp
+using System;
+using System.Collections.Generic;
+
+namespace NotificationManager
+{
+    // Interfaz de Observador
+    public interface INotificationObserver
+    {
+        void Update(string message);
+        string Preference { get; } // Preferencia del usuario
+    }
+
+    // Observador concreto para suscriptores de SMS
+    public class SMSSubscriber : INotificationObserver
+    {
+        public string Preference => "SMS";
+
+        public void Update(string message)
+        {
+            Console.WriteLine("Suscriptor SMS recibió: " + message);
+        }
+    }
+
+    // Observador concreto para suscriptores de Email
+    public class EmailSubscriber : INotificationObserver
+    {
+        public string Preference => "Email";
+
+        public void Update(string message)
+        {
+            Console.WriteLine("Suscriptor Email recibió: " + message);
+        }
+    }
+
+    // Sujeto que maneja los suscriptores y notificaciones
+    public class NotificationService
+    {
+        private List<INotificationObserver> _observers = new List<INotificationObserver>();
+
+        public void Subscribe(INotificationObserver observer)
+        {
+            _observers.Add(observer);
+        }
+
+        public void Unsubscribe(INotificationObserver observer)
+        {
+            _observers.Remove(observer);
+        }
+
+        // Método para enviar notificaciones solo a los suscriptores interesados
+        public void Notify(string message, string preference)
+        {
+            Console.WriteLine($"\nNotificación para suscriptores de {preference}:");
+            foreach (var observer in _observers)
+            {
+                if (observer.Preference == preference)
+                {
+                    observer.Update(message);
+                }
+            }
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Crear servicio de notificaciones
+            var notificationService = new NotificationService();
+
+            // Crear y suscribir observadores
+            var smsSubscriber = new SMSSubscriber();
+            var emailSubscriber = new EmailSubscriber();
+            
+            notificationService.Subscribe(smsSubscriber);
+            notificationService.Subscribe(emailSubscriber);
+
+            // Notificar solo a suscriptores de SMS
+            notificationService.Notify("Mensaje solo para SMS", "SMS");
+
+            // Notificar solo a suscriptores de Email
+            notificationService.Notify("Mensaje solo para Email", "Email");
+
+            // Notificar a todos los suscriptores
+            Console.WriteLine("\nNotificación para todos los suscriptores:");
+            notificationService.Notify("Mensaje general", "SMS");
+            notificationService.Notify("Mensaje general", "Email");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Notificación selectiva**: Solo los observadores con el tipo de preferencia coincidente reciben la notificación.
+2. **Escalabilidad**: Se pueden añadir más tipos de suscriptores sin cambiar el código de `NotificationService`.
+3. **Desacoplamiento**: `NotificationService` no conoce detalles específicos de cada suscriptor, solo gestiona la notificación y delega a los observadores.
+
+### 9. **¿Deberíamos aplicar el patrón Facade para simplificar la interfaz de envío de notificaciones en `NotificationService`?**
+
+El **Patrón Facade** proporciona una interfaz simplificada para un conjunto de interfaces en un subsistema. Este patrón es útil para ocultar la complejidad de un sistema, de modo que el cliente solo interactúe con una interfaz única y sencilla. 
+
+En nuestro caso, podríamos crear una fachada que ofrezca métodos simples para enviar notificaciones, sin que el cliente tenga que conocer los detalles de cada tipo de notificación o configuración adicional. Esto es especialmente útil si `NotificationService` gestiona múltiples subsistemas o dependencias, como configuraciones, autenticaciones o varias APIs de envío.
+
+### Implementación del Patrón Facade
+
+Vamos a implementar una clase `NotificationFacade` que actúa como una interfaz simplificada para manejar notificaciones. Internamente, esta clase puede instanciar y configurar tipos específicos de notificación y enviarlas sin que el cliente deba preocuparse por estos detalles.
+
+#### Código Ejemplo
+
+```csharp
+using System;
+
+namespace NotificationManager
+{
+    // Clases de notificación existentes
+    public class SMSNotification
+    {
+        public void SendSMS(string message)
+        {
+            Console.WriteLine("Enviando SMS: " + message);
+        }
+    }
+
+    public class EmailNotification
+    {
+        public void SendEmail(string message)
+        {
+            Console.WriteLine("Enviando Email: " + message);
+        }
+    }
+
+    public class PushNotification
+    {
+        public void SendPush(string message)
+        {
+            Console.WriteLine("Enviando Notificación Push: " + message);
+        }
+    }
+
+    // Clase Facade que simplifica el envío de notificaciones
+    public class NotificationFacade
+    {
+        private SMSNotification _smsNotification;
+        private EmailNotification _emailNotification;
+        private PushNotification _pushNotification;
+
+        public NotificationFacade()
+        {
+            _smsNotification = new SMSNotification();
+            _emailNotification = new EmailNotification();
+            _pushNotification = new PushNotification();
+        }
+
+        public void SendSMSNotification(string message)
+        {
+            _smsNotification.SendSMS(message);
+        }
+
+        public void SendEmailNotification(string message)
+        {
+            _emailNotification.SendEmail(message);
+        }
+
+        public void SendPushNotification(string message)
+        {
+            _pushNotification.SendPush(message);
+        }
+
+        public void SendAllNotifications(string message)
+        {
+            Console.WriteLine("\nEnviando notificación a todos los canales:");
+            _smsNotification.SendSMS(message);
+            _emailNotification.SendEmail(message);
+            _pushNotification.SendPush(message);
+        }
+    }
+
+    // Ejemplo de uso de la Facade
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // Instanciar la Facade para notificaciones
+            var notificationFacade = new NotificationFacade();
+
+            // Usar la Facade para enviar notificaciones de forma simplificada
+            notificationFacade.SendSMSNotification("Mensaje solo para SMS");
+            notificationFacade.SendEmailNotification("Mensaje solo para Email");
+            notificationFacade.SendPushNotification("Mensaje solo para Push");
+
+            // Enviar notificación a todos los canales
+            notificationFacade.SendAllNotifications("Mensaje para todos los canales de notificación.");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Simplicidad de uso**: El cliente solo interactúa con la clase `NotificationFacade` sin preocuparse por los detalles de cada tipo de notificación.
+2. **Flexibilidad**: La fachada se encarga de gestionar y configurar cada tipo de notificación internamente, lo que permite agregar configuraciones y opciones adicionales sin modificar el cliente.
+3. **Desacoplamiento**: Los detalles de las implementaciones específicas de notificación (SMS, Email, Push) están ocultos al cliente, lo que permite cambiar o extender estas implementaciones sin afectar al código que utiliza la fachada.
+
+### 10. **¿Cómo podríamos optimizar el uso de recursos cuando hay muchas notificaciones similares?**
+
+Para optimizar el uso de recursos cuando se generan muchas notificaciones similares, podemos aplicar el **Patrón Flyweight**. Este patrón es útil cuando hay una gran cantidad de objetos que comparten información en común. El patrón Flyweight minimiza el uso de memoria compartiendo los datos comunes entre las instancias, evitando la creación de múltiples copias innecesarias.
+
+### Implementación del Patrón Flyweight
+
+Podemos aplicar Flyweight al gestionar notificaciones que comparten el mismo contenido o el mismo formato. Crearemos una fábrica de notificaciones (`NotificationFactory`) que controla la creación de instancias, devolviendo una instancia compartida si ya existe una con las mismas características.
+
+#### Código Ejemplo
+
+`NotificationFactory` controla las instancias de notificaciones basadas en un tipo de mensaje común. Si ya existe una notificación con ese tipo, la devuelve en lugar de crear una nueva instancia.
+
+```csharp
+using System;
+using System.Collections.Generic;
+
+namespace NotificationManager
+{
+    // Flyweight que representa la notificación con un mensaje específico
+    public class Notification
+    {
+        private readonly string _message;
+
+        public Notification(string message)
+        {
+            _message = message;
+        }
+
+        public void Send(string channel)
+        {
+            Console.WriteLine($"Enviando '{_message}' a través de {channel}");
+        }
+    }
+
+    // Fábrica de Flyweights para manejar notificaciones compartidas
+    public class NotificationFactory
+    {
+        private readonly Dictionary<string, Notification> _notifications = new Dictionary<string, Notification>();
+
+        public Notification GetNotification(string message)
+        {
+            if (!_notifications.ContainsKey(message))
+            {
+                _notifications[message] = new Notification(message);
+                Console.WriteLine($"Creando nueva instancia de notificación para el mensaje: '{message}'");
+            }
+            else
+            {
+                Console.WriteLine($"Reutilizando instancia de notificación para el mensaje: '{message}'");
+            }
+
+            return _notifications[message];
+        }
+    }
+
+    // Ejemplo de uso
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var notificationFactory = new NotificationFactory();
+
+            // Obtener notificaciones con el mismo mensaje
+            var notification1 = notificationFactory.GetNotification("Mensaje de promoción");
+            notification1.Send("Email");
+
+            var notification2 = notificationFactory.GetNotification("Mensaje de promoción");
+            notification2.Send("SMS");
+
+            // Obtener notificación con un mensaje diferente
+            var notification3 = notificationFactory.GetNotification("Mensaje de alerta");
+            notification3.Send("Push");
+
+            // Reutilizar la notificación de promoción nuevamente
+            var notification4 = notificationFactory.GetNotification("Mensaje de promoción");
+            notification4.Send("Push");
+        }
+    }
+}
+```
+
+### Ventajas de esta Implementación
+
+1. **Ahorro de memoria**: Las notificaciones con el mismo contenido se comparten en lugar de crearse repetidamente, lo que reduce el consumo de memoria.
+2. **Optimización de recursos**: La fábrica gestiona las instancias, evitando la creación de objetos redundantes y mejorando el rendimiento en sistemas con muchas notificaciones similares.
+3. **Escalabilidad**: Flyweight permite que el sistema maneje grandes cantidades de notificaciones al mantener un número reducido de instancias en memoria.
